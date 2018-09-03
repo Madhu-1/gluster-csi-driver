@@ -480,6 +480,8 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 			goto SNAP_CREATE
 		}
 	} else {
+		fmt.Println("@@@@@@@ request", req)
+		fmt.Println("###### snap info ", snapInfo)
 		if snapInfo.ParentVolName != req.SourceVolumeId {
 			return nil, status.Error(codes.AlreadyExists, "CreateSnapshot - snapshot belongs to different volume name")
 		}
@@ -567,13 +569,14 @@ func (cs *ControllerServer) ListSnapshots(ctx context.Context, req *csi.ListSnap
 		snaplist api.SnapListResp
 		err      error
 	)
-	fmt.Printf("############# snapshot list request %+v", req)
+	fmt.Println("##############################################################")
+	fmt.Printf("#############@@@@ snapshot list request %+v\n\n", req)
 	if len(req.SourceVolumeId) == 0 && len(req.SnapshotId) == 0 {
 		//get all snashot and send back the response
 		snaplist, err = cs.client.SnapshotList("")
 		if err != nil {
 			//TODO need to check volume name not present
-			return nil, status.Errorf(codes.InvalidArgument, "CreateSnapshot request is nil")
+			return nil, status.Errorf(codes.Internal, "failed to list snpashot", err.Error())
 		}
 
 	}
@@ -581,14 +584,14 @@ func (cs *ControllerServer) ListSnapshots(ctx context.Context, req *csi.ListSnap
 		snaplist, err = cs.client.SnapshotList(req.SourceVolumeId)
 		if err != nil {
 			//TODO need to check volume name not present
-			return nil, status.Errorf(codes.InvalidArgument, "CreateSnapshot request is nil")
+			return nil, status.Errorf(codes.Internal, "failed to get snapshots", err.Error())
 		}
 	}
 	if len(req.SourceVolumeId) != 0 && len(req.SnapshotId) != 0 {
 		snaplist, err = cs.client.SnapshotList(req.SourceVolumeId)
 		if err != nil {
 			//TODO need to check volume name not present
-			return nil, status.Errorf(codes.InvalidArgument, "CreateSnapshot request is nil")
+			return nil, status.Errorf(codes.InvalidArgument, "failed to list snapshots", err.Error())
 		}
 		for _, snap := range snaplist {
 
@@ -621,6 +624,40 @@ func (cs *ControllerServer) ListSnapshots(ctx context.Context, req *csi.ListSnap
 				}
 			}
 		}
+	}
+	fmt.Println("coming here############# request \n\n\n", req)
+	if len(req.SourceVolumeId) == 0 && len(req.SnapshotId) != 0 {
+		var entries []*csi.ListSnapshotsResponse_Entry
+		snap, err := cs.GfDriver.client.SnapshotInfo(req.SnapshotId)
+		fmt.Println("!#@#@!#@! receviedn response", snap)
+		fmt.Println("@kjjhjaf error", err)
+		if err != nil {
+			errResp := cs.client.LastErrorResponse()
+			if errResp != nil && errResp.StatusCode != http.StatusNotFound {
+				return nil, status.Error(codes.Internal, "CreateSnapshot - sourceVolumeId is nil")
+			}
+			if errResp != nil && errResp.StatusCode != http.StatusNotFound {
+				return nil, status.Error(codes.NotFound, "CreateSnapshot - sourceVolumeId is nil")
+			}
+		}
+		entries = append(entries, &csi.ListSnapshotsResponse_Entry{
+			Snapshot: &csi.Snapshot{
+				Id:             snap.VolInfo.Name,
+				SourceVolumeId: snap.ParentVolName,
+				CreatedAt:      time.Now().Unix(),
+				//Status: snapInfo.VolInfo.State.String(),
+				//TODO need to add size also
+				Status: &csi.SnapshotStatus{
+					Type: csi.SnapshotStatus_READY,
+				},
+			},
+		})
+
+		resp := csi.ListSnapshotsResponse{}
+		resp.Entries = entries
+		fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!sent back the response")
+		return &resp, nil
+
 	}
 	fmt.Println("###########snapshot list sending back to csi ", snaplist)
 	var entries []*csi.ListSnapshotsResponse_Entry

@@ -91,7 +91,19 @@ func TestDriverSuite(t *testing.T) {
 				volumeCache["test1"] = 1000
 				return
 			}
-			if strings.HasSuffix(r.URL.String(), "/v1/snapshots") {
+			fmt.Println("#@@@@@ url ", r.URL.String())
+			if strings.Contains(r.URL.String(), "/v1/snapshots") {
+				if v, ok := r.URL.Query()["volume"]; ok {
+
+					var res api.SnapListResp
+					res = make(api.SnapListResp, 1)
+					res[0].ParentName = v[0]
+					res[0].SnapName = []string{snapCache[v[0]]}
+					//res[0].VolInfo.Name = snapCache[v[0]]
+					//res[0].ParentVolName = v[0]
+					writeResp(w, http.StatusOK, res, t)
+					return
+				}
 				var res api.SnapListResp
 				res = make(api.SnapListResp, 1)
 				res[0] = api.SnapList{
@@ -100,27 +112,33 @@ func TestDriverSuite(t *testing.T) {
 				}
 				snapCache["snaptest1"] = "voleTest"
 				writeResp(w, http.StatusOK, res, t)
+				fmt.Println("are we sending back the respones from here itself")
 				return
 			}
-			fmt.Println("########## url ", r.URL.String())
+			fmt.Println("#@@@@@ url ", r.URL.String())
+			fmt.Println("##########suffix is present ", strings.Contains(r.URL.String(), "/v1/snapshots"))
 			fmt.Println("suffix is present ", strings.Contains(r.URL.String(), "/v1/snapshot"))
-			if strings.Contains(r.URL.String(), "/v1/snapshot") {
+			if strings.HasPrefix(r.URL.String(), "/v1/snapshot") {
 				vol := strings.Split(strings.Trim(r.URL.String(), "/"), "/")
 				fmt.Println("########## snapshot cache ", snapCache)
 				fmt.Println("##### snap is present with name ", vol[2])
-
+				fmt.Println("snap present", vol[2], checkSnap(vol[2]))
 				if checkSnap(vol[2]) {
 					var res api.SnapInfo
-					res.VolInfo.Name = snapCache[vol[2]]
-					res.ParentVolName = vol[2]
+					res.VolInfo.Name = vol[2]
+					res.ParentVolName = snapCache[vol[2]]
 					writeResp(w, http.StatusOK, res, t)
-
 					return
 				}
 				resp := api.ErrorResp{}
 				resp.Errors = append(resp.Errors, api.HTTPError{
-					Code: 1,
+					Code:    1,
+					Message: "failed to get snapshot",
+					Fields: map[string]string{
+						"failed": "failed",
+					},
 				})
+				fmt.Println("sadfasdfsending not found error to client", resp)
 				writeResp(w, http.StatusNotFound, resp, t)
 				return
 			}
