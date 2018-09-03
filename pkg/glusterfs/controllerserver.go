@@ -3,14 +3,14 @@ package glusterfs
 import (
 	"context"
 	"errors"
-	"fmt"
-	"net/http"
-	"strings"
+	//"fmt"
+	//"net/http"
+	//"strings"
 
 	"github.com/gluster/gluster-csi-driver/pkg/glusterfs/utils"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi/v0"
-	"github.com/gluster/glusterd2/pkg/api"
+	//"github.com/gluster/glusterd2/pkg/api"
 	"github.com/golang/glog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -31,10 +31,10 @@ type ControllerServer struct {
 
 //CreateVolume creates and starts the volume
 func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
-	var glusterServer string
-        var mountPath string
+	//	var glusterServer string
+	//	var mountPath string
 
-        if req == nil {
+	if req == nil {
 		glog.Errorf("volume create request is nil")
 		return nil, status.Errorf(codes.InvalidArgument, "request cannot be empty")
 	}
@@ -54,25 +54,30 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		volSizeBytes = int64(req.GetCapacityRange().GetRequiredBytes())
 	}
 
-	volSizeMB := int(utils.RoundUpSize(volSizeBytes, 1024*1024))
+	//volSizeMB := int(utils.RoundUpSize(volSizeBytes, 1024*1024))
 
-        mountPath := "/mnt/glusterfs/volume1"
+	mountPath := "/mnt/glusterfs/volume1" + req.Name
 
-        // execute below command
-        // fileName = mountPath + volName
-        // $(truncate -s volSizeBytes fileName)
-        // `device=$(losetup --show --find fileName)`
-        // mkfs.xfs $device
-
-        glog.V(4).Infof("CSI Volume response: %+v", resp)
+	// execute below command
+	// fileName = mountPath + volName
+	// $(truncate -s volSizeBytes fileName)
+	// `device=$(losetup --show --find fileName)`
+	// mkfs.xfs $device
+	resp := &csi.CreateVolumeResponse{
+		Volume: &csi.Volume{
+			Id:            req.Name,
+			CapacityBytes: volSizeBytes,
+			Attributes:    map[string]string{"file-name": mountPath},
+		},
+	}
+	glog.V(4).Infof("CSI Volume response: %+v", resp)
 	return resp, nil
 }
 
-func (cs *ControllerServer) checkExistingVolume(volumeName string, volSizeMB int) (string, []string, error) {
+// func (cs *ControllerServer) checkExistingVolume(volumeName string, volSizeMB int) (string, []string, error) {
 
-	return nil
-}
-
+// 	return nil
+// }
 
 // DeleteVolume deletes the given volume.
 func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
@@ -85,13 +90,13 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	}
 	glog.V(2).Infof("Deleting volume with ID: %v", req.VolumeId)
 
-        mountPath := "/mnt/glusterfs/volume1"
+	//mountPath := "/mnt/glusterfs/volume1"
 
-        // execute below command
-        // fileName = mountPath + volName
-        // rm fileName
+	// execute below command
+	// fileName = mountPath + volName
+	// rm fileName
 
-        return &csi.DeleteVolumeResponse{}, nil
+	return &csi.DeleteVolumeResponse{}, nil
 }
 
 // ControllerPublishVolume return Unimplemented error
@@ -156,22 +161,22 @@ func (cs *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req 
 // ListVolumes returns a list of all requested volumes
 func (cs *ControllerServer) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
 	//Fetch all the volumes in the TSP
-        //volumes, err := cs.client.Volumes("")
-        //if err != nil {
-        //return nil, status.Error(codes.Internal, err.Error())
+	//volumes, err := cs.client.Volumes("")
+	//if err != nil {
+	//return nil, status.Error(codes.Internal, err.Error())
 	//}
-        mountPath := "/mnt/glusterfs/volume1"
-        volumes = ls -l mountPath
+	//mountPath := "/mnt/glusterfs/volume1"
+	// volumes = ls -l mountPath
 
-        var entries []*csi.ListVolumesResponse_Entry
-	for _, vol := range volumes {
-		entries = append(entries, &csi.ListVolumesResponse_Entry{
-			Volume: &csi.Volume{
-				Id:            vol.Name,
-				CapacityBytes: (int64(v.Size.Capacity)) * utils.MB,
-			},
-		})
-	}
+	var entries []*csi.ListVolumesResponse_Entry
+	// for _, vol := range volumes {
+	// 	entries = append(entries, &csi.ListVolumesResponse_Entry{
+	// 		Volume: &csi.Volume{
+	// 			Id:            vol.Name,
+	// 			CapacityBytes: (int64(v.Size.Capacity)) * utils.MB,
+	// 		},
+	// 	})
+	// }
 
 	resp := &csi.ListVolumesResponse{
 		Entries: entries,

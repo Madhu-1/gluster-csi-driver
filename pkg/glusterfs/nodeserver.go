@@ -2,7 +2,7 @@ package glusterfs
 
 import (
 	"context"
-	"fmt"
+	//"fmt"
 	"os"
 	"strings"
 
@@ -68,12 +68,23 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	if req.GetReadonly() {
 		mo = append(mo, "ro")
 	}
-        /* For 'block' we will use 'loopback' driver */
-        mo = append(mo, "loop")
+	/* For 'block' we will use 'loopback' driver */
+	mo = append(mo, "loop")
 
-        srcFile := req.GetVolumeAttributes()["file-name"]
+	srcFile := req.GetVolumeAttributes()["file-name"]
+	srcFile = srcFile + "/"
+	err = os.MkdirAll(srcFile, 0750)
 
-	err = glusterMounter.Mount(srcFile, targetPath, "xfs", mo)
+	if err != nil {
+		glog.V(2).Infof("failed to add srcFile %+v", err)
+	}
+	filepath := srcFile + req.GetVolumeId()
+	_, err = os.Create(filepath)
+	if err != nil {
+		glog.V(2).Infof("failed to add srcFile %+v", err)
+	}
+
+	err = glusterMounter.Mount(filepath, targetPath, "xfs", mo)
 	if err != nil {
 		if os.IsPermission(err) {
 			return nil, status.Error(codes.PermissionDenied, err.Error())
