@@ -3,9 +3,12 @@ package glusterfs
 import (
 	"context"
 	"errors"
+	"fmt"
 	//"fmt"
+	//	"os"
+	//	"os/exec"
 	//"net/http"
-	//"strings"
+	//	"strings"
 
 	"github.com/gluster/gluster-csi-driver/pkg/glusterfs/utils"
 
@@ -56,18 +59,51 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
 	//volSizeMB := int(utils.RoundUpSize(volSizeBytes, 1024*1024))
 
-	mountPath := "/mnt/glusterfs/volume1" + req.Name
+	mountPath := "/mnt/glusterfs/volume1/"
+	// // execute below command
+	fileName := mountPath + req.Name
+	// // $(truncate -s volSizeBytes fileName)
+	// // `device=$(losetup --show --find fileName)`
+	// // mkfs.xfs $device
 
-	// execute below command
-	// fileName = mountPath + volName
-	// $(truncate -s volSizeBytes fileName)
-	// `device=$(losetup --show --find fileName)`
-	// mkfs.xfs $device
+	// err := os.MkdirAll(mountPath, 0750)
+	// if err != nil {
+	// 	glog.V(4).Infof("failed to create directory: %+v", err)
+	// }
+	// file := mountPath + req.Name
+	// // _, err = os.Create(file)
+	// // if err != nil {
+	// // 	glog.V(4).Infof("failed to create directory: %+v", err)
+	// // }
+	// cmd := exec.Command("truncate", fmt.Sprintf("-s %v %s", volSizeBytes, file))
+	// fmt.Println("truncate", cmd)
+	// err = cmd.Run()
+	// if err != nil {
+	// 	glog.V(4).Infof("failed to truncate directory: %+v", err)
+	// }
+
+	// cmd = exec.Command("losetup", fmt.Sprintf("--show --find %s", file))
+	// fmt.Println("comamdns losetup", cmd)
+	// device := ""
+	// out, err := cmd.Output()
+	// if err == nil {
+	// 	deviceName := strings.Split(string(out), " \n")
+	// 	device = deviceName[0]
+
+	// }
+	// cmd = exec.Command("mkfs.xfs", device)
+	// fmt.Println("comamdns mkfs", cmd)
+	// err = cmd.Run()
+	// if err != nil {
+	// 	glog.V(4).Infof("failed to truncate directory: %+v", err)
+	// }
+
 	resp := &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
 			Id:            req.Name,
 			CapacityBytes: volSizeBytes,
-			Attributes:    map[string]string{"file-name": mountPath},
+			Attributes: map[string]string{"file-name": fileName,
+				"size": fmt.Sprintf("%v", volSizeBytes)},
 		},
 	}
 	glog.V(4).Infof("CSI Volume response: %+v", resp)
