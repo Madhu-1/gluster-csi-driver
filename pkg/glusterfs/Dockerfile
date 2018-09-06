@@ -17,6 +17,6 @@ FROM centos:7.5.1804
 # Copy glusterfs-csi-driver from build directory
 COPY ./build/glusterfs-csi-driver /glusterfs-csi-driver
 
-RUN yum -y install glusterfs-fuse && yum clean all -y
+RUN yum install kmod-xfs xfsdump xfsprogs dmapi -y && yum clean all -y
 
 ENTRYPOINT ["/glusterfs-csi-driver"]

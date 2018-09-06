@@ -2,7 +2,6 @@ package glusterfs
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
@@ -50,11 +49,8 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		return nil, status.Error(codes.InvalidArgument, "NodePublishVolume Target Path cannot be empty")
 	}
 	notMnt, err := glusterMounter.IsLikelyNotMountPoint(targetPath)
-	fmt.Println("output of target path", notMnt)
-	fmt.Println("any herror here", err)
 	if err != nil {
 		if os.IsNotExist(err) {
-			fmt.Println("creating target path on node")
 			if err := os.MkdirAll(targetPath, 0750); err != nil {
 				return nil, status.Error(codes.Internal, err.Error())
 			}
@@ -86,6 +82,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	err = os.MkdirAll(mountPath, 0750)
 	if err != nil {
 		glog.V(4).Infof("failed to create directory: %+v", err)
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 	file := srcFile
 	// _, err = os.Create(file)
@@ -95,15 +92,18 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	volSizeBytes := req.GetVolumeAttributes()["size"]
 	_, err = os.Create(file)
 	if err != nil {
-		glog.V(4).Infof("failed to truncate directory: %+v", err)
+		glog.V(4).Infof("failed to create file: %+v", err)
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 	var size int64
 	if size, err = strconv.ParseInt(volSizeBytes, 10, 64); err == nil {
 		glog.V(4).Infof("failed to parse size: %+v", err)
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 	err = os.Truncate(file, size)
 	if err != nil {
-		glog.V(4).Infof("failed to truncate directory: %+v", err)
+		glog.V(4).Infof("failed to truncate file: %+v", err)
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	cmd := exec.Command("losetup", "--show", "--find", file)
@@ -114,17 +114,17 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		device = strings.Trim(deviceName[0], "\n")
 	} else {
 		glog.V(4).Infof("failed to device directory: %+v", err)
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	cmd = exec.Command("mkfs.xfs", "-f", device)
 	_, err = cmd.Output()
 	if err != nil {
 		glog.V(4).Infof("failed to mkfs directory: %+v", err)
+		return nil, status.Error(codes.Internal, err.Error())
 	}
-	fmt.Println("why this is failingmount options ", mo)
 	//mo = []string{}
 	err = glusterMounter.Mount(srcFile, targetPath, "xfs", []string{})
-	fmt.Println("testing failed to do mounting ", err)
 	if err != nil {
 		if os.IsPermission(err) {
 			return nil, status.Error(codes.PermissionDenied, err.Error())

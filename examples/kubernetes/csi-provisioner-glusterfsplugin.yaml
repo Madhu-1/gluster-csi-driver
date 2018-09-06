@@ -57,7 +57,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: glusterfs
-          image: docker.io/gluster/glusterfs-csi-driver
+          image: docker.io/madhupr001/block-test:v1
           args :
             - "--nodeid=$(NODE_ID)"
             - "--endpoint=$(CSI_ENDPOINT)"
