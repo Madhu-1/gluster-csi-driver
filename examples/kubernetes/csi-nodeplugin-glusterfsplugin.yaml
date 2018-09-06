@@ -52,7 +52,7 @@ spec:
             capabilities:
               add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
-            image: docker.io/madhupr001/block-test:v1
+          image: docker.io/madhupr001/block-test:v1
           args :
             - "--nodeid=$(NODE_ID)"
             - "--endpoint=$(CSI_ENDPOINT)"
@@ -76,7 +76,7 @@ spec:
             - name: pods-mount-dir
               mountPath: /var/lib/kubelet/pods
               mountPropagation: "Bidirectional"
-            - mane: dev-dir
+            - name: dev-dir
               mountPath: /dev
             - name: mnt-dir
               mountPath: /mnt
@@ -97,4 +97,3 @@ spec:
           hostPath:
             path: /mnt
             type: Directory
-
