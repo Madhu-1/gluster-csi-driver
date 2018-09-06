@@ -179,8 +179,6 @@ func TestDriverSuite(t *testing.T) {
 			}
 
 			vol := strings.Split(strings.Trim(r.URL.String(), "/"), "/")
-			fmt.Println("############### volume url", r.URL.String())
-			fmt.Println("############### volume name", vol)
 			if checkVolume(vol[2]) {
 				var resp api.VolumeStatusResp
 				resp = api.VolumeStatusResp{
@@ -210,7 +208,6 @@ func TestDriverSuite(t *testing.T) {
 				delete(snapCache, key[2])
 			}
 			w.WriteHeader(http.StatusNoContent)
-			fmt.Println("##########33 am i getting any request here", r.URL.String())
 			return
 
 		case "POST":
