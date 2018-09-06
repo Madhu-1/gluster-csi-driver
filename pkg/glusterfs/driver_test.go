@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	//"time"
 
 	"github.com/gluster/gluster-csi-driver/pkg/glusterfs/utils"
 
@@ -91,41 +92,16 @@ func TestDriverSuite(t *testing.T) {
 				volumeCache["test1"] = 1000
 				return
 			}
-			fmt.Println("#@@@@@ url ", r.URL.String())
-			if strings.Contains(r.URL.String(), "/v1/snapshots") {
-				if v, ok := r.URL.Query()["volume"]; ok {
 
-					var res api.SnapListResp
-					res = make(api.SnapListResp, 1)
-					res[0].ParentName = v[0]
-					res[0].SnapName = []string{snapCache[v[0]]}
-					//res[0].VolInfo.Name = snapCache[v[0]]
-					//res[0].ParentVolName = v[0]
-					writeResp(w, http.StatusOK, res, t)
-					return
-				}
-				var res api.SnapListResp
-				res = make(api.SnapListResp, 1)
-				res[0] = api.SnapList{
-					ParentName: "voleTest",
-					SnapName:   []string{"snaptest1"},
-				}
-				snapCache["snaptest1"] = "voleTest"
-				writeResp(w, http.StatusOK, res, t)
-				fmt.Println("are we sending back the respones from here itself")
-				return
-			}
-			fmt.Println("#@@@@@ url ", r.URL.String())
-			fmt.Println("##########suffix is present ", strings.Contains(r.URL.String(), "/v1/snapshots"))
-			fmt.Println("suffix is present ", strings.Contains(r.URL.String(), "/v1/snapshot"))
-			if strings.HasPrefix(r.URL.String(), "/v1/snapshot") {
+			fmt.Println("##### Listing snapshots #####################")
+			if strings.Contains(r.URL.String(), "/v1/snapshots/") {
 				vol := strings.Split(strings.Trim(r.URL.String(), "/"), "/")
 				fmt.Println("########## snapshot cache ", snapCache)
-				fmt.Println("##### snap is present with name ", vol[2])
 				fmt.Println("snap present", vol[2], checkSnap(vol[2]))
 				if checkSnap(vol[2]) {
 					var res api.SnapInfo
 					res.VolInfo.Name = vol[2]
+					res.SnapTime = "2006-01-02T15:04:05Z"
 					res.ParentVolName = snapCache[vol[2]]
 					writeResp(w, http.StatusOK, res, t)
 					return
@@ -142,6 +118,66 @@ func TestDriverSuite(t *testing.T) {
 				writeResp(w, http.StatusNotFound, resp, t)
 				return
 			}
+
+			fmt.Println("#@@@@@ url ", r.URL.String())
+			if strings.Contains(r.URL.String(), "/v1/snapshots") {
+				if v, ok := r.URL.Query()["volume"]; ok {
+
+					if getSnapNameFromVol(v[0]) == "" {
+						resp := api.ErrorResp{}
+						resp.Errors = append(resp.Errors, api.HTTPError{
+							Code: 1,
+						})
+						writeResp(w, http.StatusNotFound, resp, t)
+						return
+					}
+					var res api.SnapListResp
+					res = make(api.SnapListResp, 1)
+					res[0].ParentName = v[0]
+					listresp := api.SnapInfo{}
+					listresp.VolInfo.Name = getSnapNameFromVol(v[0])
+					listresp.ParentVolName = v[0]
+					listresp.SnapTime = "2006-01-02T15:04:05Z"
+					res[0].SnapList = append(res[0].SnapList, listresp)
+
+					writeResp(w, http.StatusOK, res, t)
+					return
+				}
+
+				if len(snapCache) > 0 {
+					var res api.SnapListResp
+					res = make(api.SnapListResp, len(snapCache))
+					i := 0
+					fmt.Println("size of cache", len(snapCache))
+
+					for snap, vol := range snapCache {
+						fmt.Println("snap name and vol name", snap, vol)
+						listresp := api.SnapInfo{}
+						listresp.VolInfo.Name = snap
+						listresp.ParentVolName = vol
+						listresp.SnapTime = "2006-01-02T15:04:05Z"
+						res[i].ParentName = vol
+						res[i].SnapList = append(res[i].SnapList, listresp)
+						i++
+
+					}
+					writeResp(w, http.StatusOK, res, t)
+					return
+				}
+				var res api.SnapListResp
+				res = make(api.SnapListResp, 1)
+				listresp := api.SnapInfo{}
+				listresp.VolInfo.Name = "snaptest1"
+				listresp.ParentVolName = "voleTest"
+				listresp.SnapTime = "2006-01-02T15:04:05Z"
+				res[0].ParentName = "voleTest"
+				res[0].SnapList = append(res[0].SnapList, listresp)
+				snapCache["snaptest1"] = "voleTest"
+				writeResp(w, http.StatusOK, res, t)
+				fmt.Println("are we sending back the respones from here itself")
+				return
+			}
+
 			vol := strings.Split(strings.Trim(r.URL.String(), "/"), "/")
 			fmt.Println("############### volume url", r.URL.String())
 			fmt.Println("############### volume name", vol)
@@ -169,6 +205,10 @@ func TestDriverSuite(t *testing.T) {
 			return
 
 		case "DELETE":
+			if strings.HasPrefix(r.URL.String(), "/v1/snapshot") {
+				key := strings.Split(strings.Trim(r.URL.String(), "/"), "/")
+				delete(snapCache, key[2])
+			}
 			w.WriteHeader(http.StatusNoContent)
 			fmt.Println("##########33 am i getting any request here", r.URL.String())
 			return
@@ -187,7 +227,10 @@ func TestDriverSuite(t *testing.T) {
 				json.NewDecoder(r.Body).Decode(&req)
 				resp.VolInfo.Name = req.SnapName
 				resp.ParentVolName = req.VolName
+
+				fmt.Println("value before storing to the cache ", req.SnapName, req.VolName)
 				snapCache[req.SnapName] = req.VolName
+				fmt.Println("####################################stroring the snapshot info", snapCache)
 				writeResp(w, http.StatusCreated, resp, t)
 				return
 			}
@@ -249,6 +292,15 @@ func TestDriverSuite(t *testing.T) {
 func checkVolume(vol string) bool {
 	_, ok := volumeCache[vol]
 	return ok
+}
+
+func getSnapNameFromVol(vol string) string {
+	for key, value := range snapCache {
+		if value == vol {
+			return key
+		}
+	}
+	return ""
 }
 
 func checkSnap(vol string) bool {

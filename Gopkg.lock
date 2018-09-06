@@ -46,7 +46,7 @@
   branch = "master"
   name = "github.com/gluster/glusterd2"
   packages = ["pkg/api","pkg/errors","pkg/restclient","pkg/utils","plugins/bitrot/api","plugins/device/api","plugins/events/api","plugins/georeplication/api","plugins/glustershd/api"]
-  revision = "7f6a0cee0da559d4dc5138507c51770cc9a5606c"
+  revision = "7ba7bd303ff9b41aad6f63c74025de041f8dbc30"
 
 [[projects]]
   name = "github.com/gogo/protobuf"
