@@ -3,8 +3,6 @@ package glusterfs
 import (
 	"context"
 	"os"
-	"os/exec"
-	"strconv"
 	"strings"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi/v0"
@@ -68,63 +66,15 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	if req.GetReadonly() {
 		mo = append(mo, "ro")
 	}
-	/* For 'block' we will use 'loopback' driver */
+	mo = append(mo, "loop")
 
-	srcFile := req.GetVolumeAttributes()["file-name"]
+	srcFile := req.GetVolumeAttributes()["volume"]
 
-	mountPath := "/mnt/glusterfs/volume1/"
-	// execute below command
-	// fileName = mountPath + volName
-	// $(truncate -s volSizeBytes fileName)
-	// `device=$(losetup --show --find fileName)`
-	// mkfs.xfs $device
-
-	err = os.MkdirAll(mountPath, 0750)
-	if err != nil {
-		glog.V(4).Infof("failed to create directory: %+v", err)
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-	file := srcFile
-	// _, err = os.Create(file)
-	// if err != nil {s
-	// 	glog.V(4).Infof("failed to create directory: %+v", err)
-	// }
-	volSizeBytes := req.GetVolumeAttributes()["size"]
-	_, err = os.Create(file)
-	if err != nil {
-		glog.V(4).Infof("failed to create file: %+v", err)
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-	var size int64
-	if size, err = strconv.ParseInt(volSizeBytes, 10, 64); err != nil {
-		glog.V(4).Infof("failed to parse size: %+v", err)
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-	err = os.Truncate(file, size)
-	if err != nil {
-		glog.V(4).Infof("failed to truncate file: %+v", err)
-		return nil, status.Error(codes.Internal, err.Error())
+	if srcFile == "" {
+		return nil, status.Error(codes.InvalidArgument, "source file cannot be empty")
 	}
 
-	cmd := exec.Command("losetup", "--show", "--find", file)
-	device := ""
-	out, err := cmd.Output()
-	if err == nil {
-		deviceName := strings.Split(string(out), " \n")
-		device = strings.Trim(deviceName[0], "\n")
-	} else {
-		glog.V(4).Infof("failed to device directory: %+v", err)
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
-	cmd = exec.Command("mkfs.xfs", "-f", device)
-	_, err = cmd.Output()
-	if err != nil {
-		glog.V(4).Infof("failed to mkfs directory: %+v", err)
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-	//mo = []string{}
-	err = glusterMounter.Mount(device, targetPath, "xfs", []string{})
+	err = glusterMounter.Mount(srcFile, targetPath, "xfs", mo)
 	if err != nil {
 		if os.IsPermission(err) {
 			return nil, status.Error(codes.PermissionDenied, err.Error())

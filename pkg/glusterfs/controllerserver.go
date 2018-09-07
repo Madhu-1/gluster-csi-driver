@@ -3,12 +3,8 @@ package glusterfs
 import (
 	"context"
 	"errors"
-	"fmt"
-	//"fmt"
-	//	"os"
-	//	"os/exec"
-	//"net/http"
-	//	"strings"
+	"os"
+	"os/exec"
 
 	"github.com/gluster/gluster-csi-driver/pkg/glusterfs/utils"
 
@@ -24,6 +20,7 @@ const (
 	glusterDescAnnValue       = "gluster.org/glusterfs-csi"
 	defaultVolumeSize   int64 = 1000 * utils.MB // default volume size ie 1 GB
 	defaultReplicaCount       = 3
+	mountPath                 = "/mnt/glusterfs/volume1/"
 )
 
 var errVolumeNotFound = errors.New("volume not found")
@@ -57,63 +54,34 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		volSizeBytes = int64(req.GetCapacityRange().GetRequiredBytes())
 	}
 
-	//volSizeMB := int(utils.RoundUpSize(volSizeBytes, 1024*1024))
-
-	mountPath := "/mnt/glusterfs/volume1/"
 	// // execute below command
 	fileName := mountPath + req.Name
-	// // $(truncate -s volSizeBytes fileName)
-	// // `device=$(losetup --show --find fileName)`
-	// // mkfs.xfs $device
-
-	// err := os.MkdirAll(mountPath, 0750)
-	// if err != nil {
-	// 	glog.V(4).Infof("failed to create directory: %+v", err)
-	// }
-	// file := mountPath + req.Name
-	// // _, err = os.Create(file)
-	// // if err != nil {
-	// // 	glog.V(4).Infof("failed to create directory: %+v", err)
-	// // }
-	// cmd := exec.Command("truncate", fmt.Sprintf("-s %v %s", volSizeBytes, file))
-	// fmt.Println("truncate", cmd)
-	// err = cmd.Run()
-	// if err != nil {
-	// 	glog.V(4).Infof("failed to truncate directory: %+v", err)
-	// }
-
-	// cmd = exec.Command("losetup", fmt.Sprintf("--show --find %s", file))
-	// fmt.Println("comamdns losetup", cmd)
-	// device := ""
-	// out, err := cmd.Output()
-	// if err == nil {
-	// 	deviceName := strings.Split(string(out), " \n")
-	// 	device = deviceName[0]
-
-	// }
-	// cmd = exec.Command("mkfs.xfs", device)
-	// fmt.Println("comamdns mkfs", cmd)
-	// err = cmd.Run()
-	// if err != nil {
-	// 	glog.V(4).Infof("failed to truncate directory: %+v", err)
-	// }
-
+	_, err := os.Create(fileName)
+	if err != nil {
+		glog.Errorf("failed to create file: %+v", err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	err = os.Truncate(fileName, volSizeBytes)
+	if err != nil {
+		glog.Errorf("failed to truncate file: %+v", err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	cmd := exec.Command("mkfs.xfs", "-f", fileName)
+	_, err = cmd.Output()
+	if err != nil {
+		glog.Errorf("failed to mkfs directory: %+v", err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
 	resp := &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
 			Id:            req.Name,
 			CapacityBytes: volSizeBytes,
-			Attributes: map[string]string{"file-name": fileName,
-				"size": fmt.Sprintf("%v", volSizeBytes)},
+			Attributes:    map[string]string{"volume": fileName},
 		},
 	}
 	glog.V(4).Infof("CSI Volume response: %+v", resp)
 	return resp, nil
 }
-
-// func (cs *ControllerServer) checkExistingVolume(volumeName string, volSizeMB int) (string, []string, error) {
-
-// 	return nil
-// }
 
 // DeleteVolume deletes the given volume.
 func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
@@ -125,13 +93,10 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		return nil, status.Error(codes.InvalidArgument, "volume ID is nil")
 	}
 	glog.V(2).Infof("Deleting volume with ID: %v", req.VolumeId)
-
-	//mountPath := "/mnt/glusterfs/volume1"
-
-	// execute below command
-	// fileName = mountPath + volName
-	// rm fileName
-
+	err := os.Remove(mountPath + req.GetVolumeId())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Failed to delete volume", err.Error())
+	}
 	return &csi.DeleteVolumeResponse{}, nil
 }
 
