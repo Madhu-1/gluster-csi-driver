@@ -96,7 +96,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	var size int64
-	if size, err = strconv.ParseInt(volSizeBytes, 10, 64); err == nil {
+	if size, err = strconv.ParseInt(volSizeBytes, 10, 64); err != nil {
 		glog.V(4).Infof("failed to parse size: %+v", err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -124,7 +124,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	//mo = []string{}
-	err = glusterMounter.Mount(srcFile, targetPath, "xfs", []string{})
+	err = glusterMounter.Mount(device, targetPath, "xfs", []string{})
 	if err != nil {
 		if os.IsPermission(err) {
 			return nil, status.Error(codes.PermissionDenied, err.Error())
