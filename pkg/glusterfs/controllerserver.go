@@ -544,6 +544,7 @@ func (cs *ControllerServer) ListSnapshots(ctx context.Context, req *csi.ListSnap
 		err        error
 		startToken int32
 	)
+
 	if req.GetStartingToken() != "" {
 		i, err := strconv.ParseUint(req.StartingToken, 10, 32)
 		if err != nil {

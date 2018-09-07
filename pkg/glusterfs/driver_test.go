@@ -17,8 +17,12 @@ import (
 	"k8s.io/kubernetes/pkg/util/mount"
 )
 
-var volumeCache = make(map[string]uint64)
-var snapCache = make(map[string]string)
+type volume struct {
+	Size     uint64
+	snapList []string
+}
+
+var volumeCache = make(map[string]volume)
 
 func TestDriverSuite(t *testing.T) {
 	glusterMounter = &mount.FakeMounter{}
@@ -86,17 +90,17 @@ func TestDriverSuite(t *testing.T) {
 					Metadata: map[string]string{glusterDescAnn: glusterDescAnnValue},
 				})
 				writeResp(w, http.StatusOK, resp, t)
-				volumeCache["test1"] = 1000
+				volumeCache["test1"] = volume{Size: 1000}
 				return
 			}
 
 			if strings.Contains(r.URL.String(), "/v1/snapshots/") {
 				vol := strings.Split(strings.Trim(r.URL.String(), "/"), "/")
-				if checkSnap(vol[2]) {
+				if getVolumeNameFromSnap(vol[2]) != "" {
 					var res api.SnapInfo
 					res.VolInfo.Name = vol[2]
 					res.SnapTime = "2006-01-02T15:04:05Z"
-					res.ParentVolName = snapCache[vol[2]]
+					res.ParentVolName = getVolumeNameFromSnap(vol[2])
 					writeResp(w, http.StatusOK, res, t)
 					return
 				}
@@ -114,41 +118,49 @@ func TestDriverSuite(t *testing.T) {
 
 			if strings.Contains(r.URL.String(), "/v1/snapshots") {
 				if v, ok := r.URL.Query()["volume"]; ok {
-
 					if getSnapNameFromVol(v[0]) == "" {
-						resp := api.ErrorResp{}
-						resp.Errors = append(resp.Errors, api.HTTPError{
-							Code: 1,
-						})
-						writeResp(w, http.StatusNotFound, resp, t)
+						writeResp(w, http.StatusOK, api.SnapListResp{}, t)
 						return
 					}
 					var res api.SnapListResp
-					res = make(api.SnapListResp, 1)
-					res[0].ParentName = v[0]
-					listresp := api.SnapInfo{}
-					listresp.VolInfo.Name = getSnapNameFromVol(v[0])
-					listresp.ParentVolName = v[0]
-					listresp.SnapTime = "2006-01-02T15:04:05Z"
-					res[0].SnapList = append(res[0].SnapList, listresp)
+					res = make(api.SnapListResp, 0)
+					snapList := api.SnapList{}
+					for _, snap := range volumeCache[v[0]].snapList {
+
+						listresp := api.SnapInfo{}
+
+						listresp.VolInfo.Name = snap
+						listresp.ParentVolName = v[0]
+						listresp.SnapTime = "2006-01-02T15:04:05Z"
+						snapList.ParentName = v[0]
+						snapList.SnapList = append(snapList.SnapList, listresp)
+
+					}
+					res = append(res, snapList)
 
 					writeResp(w, http.StatusOK, res, t)
 					return
+
 				}
 
-				if len(snapCache) > 0 {
+				if isSnapsPresent() {
 					var res api.SnapListResp
-					res = make(api.SnapListResp, len(snapCache))
-					i := 0
-					for snap, vol := range snapCache {
-						listresp := api.SnapInfo{}
-						listresp.VolInfo.Name = snap
-						listresp.ParentVolName = vol
-						listresp.SnapTime = "2006-01-02T15:04:05Z"
-						res[i].ParentName = vol
-						res[i].SnapList = append(res[i].SnapList, listresp)
-						i++
+					res = make(api.SnapListResp, 0)
+					for vol, snap := range volumeCache {
+						snapList := api.SnapList{}
+						for _, s := range snap.snapList {
+							listresp := api.SnapInfo{}
 
+							listresp.VolInfo.Name = s
+							listresp.ParentVolName = vol
+							listresp.SnapTime = "2006-01-02T15:04:05Z"
+							snapList.ParentName = vol
+							snapList.SnapList = append(snapList.SnapList, listresp)
+
+						}
+						if snapList.ParentName != "" {
+							res = append(res, snapList)
+						}
 					}
 					writeResp(w, http.StatusOK, res, t)
 					return
@@ -161,7 +173,9 @@ func TestDriverSuite(t *testing.T) {
 				listresp.SnapTime = "2006-01-02T15:04:05Z"
 				res[0].ParentName = "voleTest"
 				res[0].SnapList = append(res[0].SnapList, listresp)
-				snapCache["snaptest1"] = "voleTest"
+				volumeCache["volTest"] = volume{
+					snapList: []string{"snaptest1"},
+				}
 				writeResp(w, http.StatusOK, res, t)
 				return
 			}
@@ -177,7 +191,7 @@ func TestDriverSuite(t *testing.T) {
 					},
 					Online: true,
 					Size: api.SizeInfo{
-						Capacity: volumeCache[vol[2]],
+						Capacity: volumeCache[vol[2]].Size,
 					},
 				}
 				writeResp(w, http.StatusOK, resp, t)
@@ -193,7 +207,7 @@ func TestDriverSuite(t *testing.T) {
 		case "DELETE":
 			if strings.HasPrefix(r.URL.String(), "/v1/snapshot") {
 				key := strings.Split(strings.Trim(r.URL.String(), "/"), "/")
-				delete(snapCache, key[2])
+				deleteSnap(key[2])
 			}
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -220,7 +234,11 @@ func TestDriverSuite(t *testing.T) {
 				resp.VolInfo.Name = req.SnapName
 				resp.ParentVolName = req.VolName
 				resp.SnapTime = "2006-01-02T15:04:05Z"
-				snapCache[req.SnapName] = req.VolName
+				volResp := volumeCache[req.VolName]
+				volResp.snapList = append(volResp.snapList, req.SnapName)
+				volumeCache[req.VolName] = volResp
+				// volumeCache[req.VolName].snapList = append(volumeCache[req.VolName].snapList, req.SnapName)
+				//snapCache[req.SnapName] = req.VolName
 				writeResp(w, http.StatusCreated, resp, t)
 				return
 			}
@@ -232,7 +250,8 @@ func TestDriverSuite(t *testing.T) {
 				defer r.Body.Close()
 				json.NewDecoder(r.Body).Decode(&req)
 				resp.Name = req.Name
-				volumeCache[req.Name] = req.Size
+
+				volumeCache[req.Name] = volume{Size: req.Size}
 				writeResp(w, http.StatusCreated, resp, t)
 				return
 			}
@@ -275,24 +294,50 @@ func TestDriverSuite(t *testing.T) {
 	sanity.Test(t, cfg)
 }
 
+func isSnapsPresent() bool {
+	found := false
+	for _, value := range volumeCache {
+		if len(value.snapList) > 0 {
+			found = true
+		}
+	}
+	return found
+}
 func checkVolume(vol string) bool {
 	_, ok := volumeCache[vol]
 	return ok
 }
 
-func getSnapNameFromVol(vol string) string {
-	for key, value := range snapCache {
-		if value == vol {
-			return key
+func deleteSnap(snapname string) {
+	for key, value := range volumeCache {
+		for i, s := range value.snapList {
+			if s == snapname {
+				resp := volumeCache[key]
+				resp.snapList = append(resp.snapList[:i], resp.snapList[i+1:]...)
+				volumeCache[key] = resp
+				break
+			}
+		}
+	}
+}
+func getVolumeNameFromSnap(snap string) string {
+	for key, value := range volumeCache {
+		for _, s := range value.snapList {
+			if snap == s {
+				return key
+			}
 		}
 	}
 	return ""
 }
 
-func checkSnap(vol string) bool {
-	_, ok := snapCache[vol]
-	return ok
+func getSnapNameFromVol(vol string) string {
+	if len(volumeCache[vol].snapList) > 0 {
+		return volumeCache[vol].snapList[0]
+	}
+	return ""
 }
+
 func writeResp(w http.ResponseWriter, status int, resp interface{}, t *testing.T) {
 	w.WriteHeader(status)
 	err := json.NewEncoder(w).Encode(&resp)
