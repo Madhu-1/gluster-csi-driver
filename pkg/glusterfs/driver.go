@@ -54,8 +54,14 @@ func NewidentityServer(g *GfDriver) *IdentityServer {
 	}
 }
 
+var srv csicommon.NonBlockingGRPCServer
+
 func (g *GfDriver) Run() {
-	srv := csicommon.NewNonBlockingGRPCServer()
+	srv = csicommon.NewNonBlockingGRPCServer()
 	srv.Start(g.Endpoint, NewidentityServer(g), NewControllerServer(g), NewNodeServer(g))
 	srv.Wait()
+}
+
+func (g *GfDriver) Stop() {
+	srv.Stop()
 }

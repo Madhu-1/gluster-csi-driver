@@ -2,17 +2,14 @@ package glusterfs
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"strings"
 	"testing"
-	//"time"
 
 	"github.com/gluster/gluster-csi-driver/pkg/glusterfs/utils"
-
 	"github.com/gluster/glusterd2/pkg/api"
 	"github.com/gluster/glusterd2/pkg/restclient"
 	"github.com/kubernetes-csi/csi-test/pkg/sanity"
@@ -93,11 +90,8 @@ func TestDriverSuite(t *testing.T) {
 				return
 			}
 
-			fmt.Println("##### Listing snapshots #####################")
 			if strings.Contains(r.URL.String(), "/v1/snapshots/") {
 				vol := strings.Split(strings.Trim(r.URL.String(), "/"), "/")
-				fmt.Println("########## snapshot cache ", snapCache)
-				fmt.Println("snap present", vol[2], checkSnap(vol[2]))
 				if checkSnap(vol[2]) {
 					var res api.SnapInfo
 					res.VolInfo.Name = vol[2]
@@ -114,12 +108,10 @@ func TestDriverSuite(t *testing.T) {
 						"failed": "failed",
 					},
 				})
-				fmt.Println("sadfasdfsending not found error to client", resp)
 				writeResp(w, http.StatusNotFound, resp, t)
 				return
 			}
 
-			fmt.Println("#@@@@@ url ", r.URL.String())
 			if strings.Contains(r.URL.String(), "/v1/snapshots") {
 				if v, ok := r.URL.Query()["volume"]; ok {
 
@@ -148,10 +140,7 @@ func TestDriverSuite(t *testing.T) {
 					var res api.SnapListResp
 					res = make(api.SnapListResp, len(snapCache))
 					i := 0
-					fmt.Println("size of cache", len(snapCache))
-
 					for snap, vol := range snapCache {
-						fmt.Println("snap name and vol name", snap, vol)
 						listresp := api.SnapInfo{}
 						listresp.VolInfo.Name = snap
 						listresp.ParentVolName = vol
@@ -174,7 +163,6 @@ func TestDriverSuite(t *testing.T) {
 				res[0].SnapList = append(res[0].SnapList, listresp)
 				snapCache["snaptest1"] = "voleTest"
 				writeResp(w, http.StatusOK, res, t)
-				fmt.Println("are we sending back the respones from here itself")
 				return
 			}
 
@@ -216,18 +204,23 @@ func TestDriverSuite(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
+			if strings.HasSuffix(r.URL.String(), "activate") || strings.HasSuffix(r.URL.String(), "deactivate") {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
 			if strings.HasPrefix(r.URL.String(), "/v1/snapshot") {
 				var resp api.SnapCreateResp
 
 				var req api.SnapCreateReq
 				defer r.Body.Close()
-				json.NewDecoder(r.Body).Decode(&req)
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
 				resp.VolInfo.Name = req.SnapName
 				resp.ParentVolName = req.VolName
-
-				fmt.Println("value before storing to the cache ", req.SnapName, req.VolName)
+				resp.SnapTime = "2006-01-02T15:04:05Z"
 				snapCache[req.SnapName] = req.VolName
-				fmt.Println("####################################stroring the snapshot info", snapCache)
 				writeResp(w, http.StatusCreated, resp, t)
 				return
 			}
@@ -243,12 +236,7 @@ func TestDriverSuite(t *testing.T) {
 				writeResp(w, http.StatusCreated, resp, t)
 				return
 			}
-			if strings.HasSuffix(r.URL.String(), "activate") || strings.HasSuffix(r.URL.String(), "deactivate") {
-				w.WriteHeader(http.StatusOK)
-				return
-			} else {
-				fmt.Println("########33 post URl ", r.URL.String())
-			}
+
 		}
 	}))
 
@@ -271,6 +259,7 @@ func TestDriverSuite(t *testing.T) {
 	d.Endpoint = endpoint
 	d.NodeID = "testing"
 	go d.Run()
+	defer d.Stop()
 
 	mntStageDir := "/tmp/mntStageDir"
 	mntDir := "/tmp/mntDir"
@@ -301,7 +290,6 @@ func getSnapNameFromVol(vol string) string {
 }
 
 func checkSnap(vol string) bool {
-	fmt.Println("list of snapshots presenet ", snapCache)
 	_, ok := snapCache[vol]
 	return ok
 }
