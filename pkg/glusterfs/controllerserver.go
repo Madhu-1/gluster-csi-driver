@@ -173,18 +173,7 @@ func (cs *ControllerServer) startVolume(volumeName string, volSizeBytes int64) (
 	}
 	return resp, nil
 }
-func (cs *ControllerServer) checkExistingSnapshot(snapName string) error {
-	_, err := cs.GfDriver.client.SnapshotInfo(snapName)
-	if err != nil {
-		errResp := cs.client.LastErrorResponse()
-		//errResp will be nil in case of No route to host error
-		if errResp != nil && errResp.StatusCode != http.StatusNotFound {
-			return status.Error(codes.Internal, err.Error())
-		}
-		return err
-	}
-	return nil
-}
+
 func (cs *ControllerServer) checkExistingVolume(volumeName string, volSizeMB int) (string, []string, error) {
 	var (
 		tspServers  []string
@@ -433,14 +422,14 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 	if req.GetSourceVolumeId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "CreateSnapshot - sourceVolumeId is nil")
 	}
-
+	glog.V(2).Infof("recevied request to create snapshot %v from volume %v", req.GetName(), req.GetSourceVolumeId())
 	if req.GetName() == req.GetSourceVolumeId() {
 		//TODO in glusterd2 we cannot create a snapshot as same name as volume name
 		return nil, status.Error(codes.InvalidArgument, "CreateSnapshot - sourceVolumeId  and snapshot name cannot be same")
 	}
 	snapInfo, err := cs.GfDriver.client.SnapshotInfo(req.Name)
 	if err != nil {
-
+		glog.Errorf("failed to get snapshot info for %v with Error %v", req.GetName(), err.Error())
 		errResp := cs.client.LastErrorResponse()
 		//errResp will be nil in case of No route to host error
 		if errResp != nil && errResp.StatusCode != http.StatusNotFound {
@@ -454,6 +443,7 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 	} else {
 
 		if snapInfo.ParentVolName != req.GetSourceVolumeId() {
+			glog.Errorf("snapshot belongs to different volume %v", snapInfo.ParentVolName)
 			return nil, status.Error(codes.AlreadyExists, fmt.Sprintf("CreateSnapshot - snapshot %s belongs to different volume %s", snapInfo.ParentVolName, req.GetSourceVolumeId()))
 		}
 
@@ -483,6 +473,7 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 	}
 	snapResp, err := cs.client.SnapshotCreate(snapReq)
 	if err != nil {
+		glog.Errorf("failed to create snapshot %v", err)
 		return nil, status.Errorf(codes.Internal, "CreateSnapshot - snapshot create failed", err.Error())
 	}
 	t1, e := time.Parse(time.RFC3339, snapResp.SnapTime)
